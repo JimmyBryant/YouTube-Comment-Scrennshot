@@ -1,0 +1,65 @@
+:root{
+  --font-size: 24px;
+}
+tp-yt-paper-button.ytd-tri-state-button-view-model {
+  display: none;
+}
+.style-scope.ytd-expander sider-trans-text[data-display="underline"],
+.yt-core-attributed-string--white-space-pre-wrap
+  sider-trans-text[data-display="underline"],
+p[class*="-PCommentText"] sider-trans-text[data-display="underline"] {
+  font-size: var(--font-size);
+  color: #000;
+  background: yellow;
+  font-weight: bold;
+  line-height: 1.25;
+}
+.more-button.style-scope.ytd-comment-view-model sider-trans-text {
+  font-size: 12px;
+  background: transparent;
+}
+p[class*="-PCommentText"] sider-trans-text[data-display="underline"] {
+  font-weight: bold;
+}
+span[class*="-SpanUserNameText"] sider-trans-text {
+  display: none;
+}
+.__Cici_translated_text_show_underline__
+  .__Cici__translate__
+  .__Cici_translate_translated_inject_node__
+  > span {
+  font-size: var(--font-size);
+  color: #000;
+  background: yellow !important;
+  font-weight: bold;
+  line-height: 1.25;
+}
+#published-time-text sider-trans,
+.more-button sider-trans,
+tp-yt-paper-button font.__Cici__translate__,
+tp-yt-paper-button sider-trans{
+    display: none !important;
+}
+div#toolbar sider-trans {
+    display: none;
+}
+yt-button-shape font.__Cici_translate_translated_inject_node__{
+  display: none !important;
+}
+/* styles.css */
+.screenshot-button {
+    background: transparent;
+    border: none;
+    font-weight: 400;
+    background-color: #FFF;
+    border: 1px solid #ededed;
+    color: #000;
+    cursor: pointer;
+    padding: 5px 12px;
+    margin:0 8px;
+}
+.screenshot-button:hover{
+    color: orangered;
+    border-radius: 5px;
+}
+  
