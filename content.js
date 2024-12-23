@@ -60,6 +60,52 @@ function hexToRgba(hex, opacity) {
   const b = bigint & 255;
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
+
+// 获取所有用户设置
+async function getUserSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(
+      [
+        "backgroundOpacity",
+        "backgroundColor",
+        "commentFont",
+        "commentSize",
+        "commentColor",
+        "translationFont",
+        "translationSize",
+        "translationColor",
+      ],
+      resolve
+    );
+  });
+}
+
+// Helper: 计算文字总高度
+function calculateTextHeight(context, text, maxWidth, fontSize, lineHeight) {
+  const isChinese = /[\u4e00-\u9fa5]/.test(text);
+  const words = isChinese ? text.split("") : text.split(" ");
+  let line = "";
+  let totalHeight = 0;
+
+  context.font = `${fontSize}px ${isChinese ? "PingFang SC" : "Arial"}`;
+
+  words.forEach((word, index) => {
+    const testLine = line + word + (isChinese ? "" : " ");
+    const testWidth = context.measureText(testLine).width;
+    if (testWidth > maxWidth && line) {
+      totalHeight += lineHeight;
+      line = word + (isChinese ? "" : " ");
+    } else {
+      line = testLine;
+    }
+    if (index === words.length - 1) {
+      totalHeight += lineHeight;
+    }
+  });
+
+  return totalHeight;
+}
+const baseLinePadding = 3*2; // 文字顶部部与评论框底部的距离+底部与评论框底部的距离
 // Function to take a screenshot of the comment
 async function takeScreenshot(comment) {
   return new Promise(async (resolve, reject) => {
@@ -67,13 +113,55 @@ async function takeScreenshot(comment) {
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
       const rect = comment.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      // canvas.width = rect.width;
+      // canvas.height = rect.height;
+      const canvasWidth = rect.width;
+      const maxTextWidth = canvasWidth - 70; // 文本区域宽度
 
-      // 获取用户设置的背景颜色和透明度
-      const { backgroundOpacity = 0.5, backgroundColor = "#ffffff" } = await new Promise((resolve) =>
-        chrome.storage.sync.get(["backgroundOpacity", "backgroundColor"], resolve)
+      // 获取用户设置
+      let {
+        backgroundOpacity = 0.5,
+        backgroundColor = "#ffffff",
+        commentFont = "Arial",
+        commentSize = 14,
+        commentColor = "#333",
+        translationFont = "Arial",
+        translationSize = 16,
+        translationColor = "#000",
+      } = await getUserSettings();
+
+      // 确保字体大小为数字
+      commentSize = parseInt(commentSize, 10) || 14; // 默认值为 14
+      translationSize = parseInt(translationSize, 10) || 16; // 默认值为 16
+
+      // 获取原始评论文本
+      const textElement = comment.querySelector("#content-text");
+      const originComment = extractTextFromNodes(
+        textElement.querySelector("span.yt-core-attributed-string").childNodes
       );
+
+      // 获取翻译后的中文文本
+      const transElement =
+        textElement.querySelector("sider-trans-text") ||
+        textElement.querySelector("font.__Cici_translate_translated_inject_node__") ||
+        comment.querySelector("ytd-expander sider-trans-text");
+      const translatedText = transElement ? transElement.textContent.trim() : "";
+
+      // 计算动态部分高度
+      const usernameHeight = 40; // 固定
+      const likesHeight = 20; // 固定
+
+      const originTextHeight = calculateTextHeight(context, originComment, maxTextWidth, commentSize, commentSize+baseLinePadding);
+      const translatedTextHeight = translatedText
+        ? calculateTextHeight(context, translatedText, maxTextWidth, translationSize, translationSize+baseLinePadding)
+        : 0;
+
+      // 总高度 = 姓名高度 + 原评论高度 + 翻译高度 + 点赞高度 + 边距
+      const canvasHeight = usernameHeight + originTextHeight + translatedTextHeight + likesHeight + 10;
+
+      // 设置 canvas 尺寸
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
 
       // 设置背景颜色和透明度
       context.fillStyle = hexToRgba(backgroundColor, backgroundOpacity);
@@ -87,26 +175,14 @@ async function takeScreenshot(comment) {
       drawAvatar(context, avatarImg, 30, 30, 20);
 
       // 绘制用户名
+      let textY = 20
       const username = comment.querySelector("#author-text span").textContent.trim();
-      drawText(context, username, 60, 10, true, 14);
+      drawText(context, username, 60, textY, commentFont, 12, commentColor, true);
 
-      // 获取英文评论文本
-      const textElement = comment.querySelector("#content-text");
-      const englishText = extractTextFromNodes(
-        textElement.querySelector("span.yt-core-attributed-string").childNodes
-      );
-
-      // 获取翻译后的中文文本
-      const transElement =
-        textElement.querySelector("sider-trans-text") ||
-        textElement.querySelector("font.__Cici_translate_translated_inject_node__") ||
-        comment.querySelector("ytd-expander sider-trans-text");
-
-      // 绘制英文和翻译文本
-      let nextY = drawTextWithWordWrap(context, englishText, 60, 30, canvas.width - 70, 14, true);
-      if (transElement) {
-        const chineseText = transElement.textContent.trim();
-        nextY = drawTextWithWordWrap(context, chineseText, 60, nextY + 10, canvas.width - 70, 16, false);
+      // 绘制原评论和翻译后的评论文本
+      let nextY = drawTextWithWordWrap(context, originComment, 60, textY + 20, canvas.width - 70, commentFont, commentSize, commentColor, true);
+      if (translatedText) {
+        nextY = drawTextWithWordWrap(context, translatedText, 60, nextY + 5, canvas.width - 70, translationFont, translationSize, translationColor, false);
       }
 
       // 绘制点赞图标和点赞数
@@ -114,7 +190,8 @@ async function takeScreenshot(comment) {
       if (likesCount) {
         const likes = likesCount.childNodes[0].textContent.trim();
         const thumbsUpIcon = await loadImage(chrome.runtime.getURL("thumb-up-stroke.png"));
-        drawLikes(context, thumbsUpIcon, likes, 60, rect.height - 20);
+        console.log('likes y',canvasHeight - 20)
+        drawLikes(context, thumbsUpIcon, likes, 60, canvasHeight - 20);
       }
 
       // 下载截图
@@ -144,52 +221,113 @@ function drawAvatar(context, img, x, y, radius) {
   context.restore();
 }
 
-// Helper: 绘制文本
-function drawText(context, text, x, y, originComment, fontSize) {
-  context.font = `${fontSize}px Arial`;
+// Helper: 绘制单行文本
+function drawText(context, text, x, y, font, fontSize, color, originComment = false) {
+  context.font = `${parseInt(fontSize)}px ${font}`;
+
   if (!originComment) {
+    // 如果是翻译文本，绘制描边效果
     context.strokeStyle = "yellow";
     context.lineWidth = 2;
     context.strokeText(text, x, y);
   }
-  context.fillStyle = "black";
+
+  context.fillStyle = color; // 设置字体颜色
   context.fillText(text, x, y);
+  console.log('drawText', text, x, y, font, fontSize, color, originComment);
 }
 
 // Helper: 绘制多行文本
-function drawTextWithWordWrap(context, text, x, y, maxWidth, fontSize, originComment) {
+function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, color, originComment = false) {
   const isChinese = /[\u4e00-\u9fa5]/.test(text);
-  const words = isChinese ? text.split("") : text.split(" ");
-  const lineHeight = fontSize + 4;
+  const words = isChinese ? text.split("") : text.split(" "); // 中文按字切割，其他按单词
+  fontSize = parseInt(fontSize);
+  const lineHeight = fontSize + baseLinePadding; // 行高
   let line = "";
   let currentY = y;
 
-  context.font = `${fontSize}px ${isChinese ? "PingFang SC" : "Arial"}`;
+  context.font = `${fontSize}px ${font}`;
+  context.fillStyle = color;
 
   words.forEach((word, index) => {
     const testLine = line + word + (isChinese ? "" : " ");
     const testWidth = context.measureText(testLine).width;
+
+    // 如果超出最大宽度则换行
     if (testWidth > maxWidth && line) {
-      drawText(context, line, x, currentY, originComment, fontSize);
+      drawText(context, line.trim(), x, currentY, font, fontSize, color, originComment);
       line = word + (isChinese ? "" : " ");
-      currentY += lineHeight;
+      currentY += lineHeight; // 下一行的 y 坐标
     } else {
       line = testLine;
     }
+
+    // 绘制最后一行
     if (index === words.length - 1) {
-      drawText(context, line, x, currentY, originComment, fontSize);
+      drawText(context, line.trim(), x, currentY, font, fontSize, color, originComment);
     }
   });
 
-  return currentY + lineHeight;
+  return currentY + lineHeight; // 返回最后一行的 y 坐标
 }
+
+// // Helper: 绘制文本
+// function drawText(context, text, x, y, originComment, fontSize) {
+//   context.font = `${fontSize}px Arial`;
+//   if (!originComment) {
+//     context.strokeStyle = "yellow";
+//     context.lineWidth = 2;
+//     context.strokeText(text, x, y);
+//   }
+//   context.fillStyle = "black";
+//   context.fillText(text, x, y);
+// }
+
+// // Helper: 绘制多行文本
+// function drawTextWithWordWrap(context, text, x, y, maxWidth, fontSize, originComment) {
+//   const isChinese = /[\u4e00-\u9fa5]/.test(text);
+//   const words = isChinese ? text.split("") : text.split(" ");
+//   const lineHeight = fontSize + 4;
+//   let line = "";
+//   let currentY = y;
+
+//   context.font = `${fontSize}px ${isChinese ? "PingFang SC" : "Arial"}`;
+
+//   words.forEach((word, index) => {
+//     const testLine = line + word + (isChinese ? "" : " ");
+//     const testWidth = context.measureText(testLine).width;
+//     if (testWidth > maxWidth && line) {
+//       drawText(context, line, x, currentY, originComment, fontSize);
+//       line = word + (isChinese ? "" : " ");
+//       currentY += lineHeight;
+//     } else {
+//       line = testLine;
+//     }
+//     if (index === words.length - 1) {
+//       drawText(context, line, x, currentY, originComment, fontSize);
+//     }
+//   });
+
+//   return currentY + lineHeight;
+// }
 
 // Helper: 绘制点赞信息
 function drawLikes(context, icon, likes, x, y) {
-  context.drawImage(icon, x, y, 16, 16);
+  const iconSize = 16; // 图标尺寸
+  const fontSize = 12; // 文字尺寸
+
+  // 绘制图标
+  context.drawImage(icon, x, y, iconSize, iconSize);
+
+  // 设置文字样式
   context.fillStyle = "rgba(0,0,0,.5)";
-  context.font = "12px sans-serif";
-  context.fillText(likes, x + 26, y + 4);
+  context.font = `${fontSize}px sans-serif`;
+
+  // 手动调整文字的 y 坐标，使其基线与图标垂直中心对齐
+  const textY = y + iconSize / 2 + fontSize / 2; // 字体基线调整 (fontSize / 3 是经验值)
+
+  // 绘制文字
+  context.fillText(likes, x + iconSize + 10, textY);
 }
 
 // Helper: 从节点提取文本
