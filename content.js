@@ -32,7 +32,7 @@ function addScreenshotButton() {
         button.innerText = '生成中';
         takeScreenshot(comment).then(() => {
           button.innerText = '截图'; // 图片生成完成后恢复按钮文本为“截图”
-        }).catch(()=>{
+        }).catch(() => {
           console.error('截图失败');
           button.innerText = '截图';
         });
@@ -52,142 +52,165 @@ function loadImage(src) {
   });
 }
 
+// 工具函数：将 HEX 转换为 RGBA
+function hexToRgba(hex, opacity) {
+  const bigint = parseInt(hex.slice(1), 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
 // Function to take a screenshot of the comment
 async function takeScreenshot(comment) {
   return new Promise(async (resolve, reject) => {
     try {
-      // Create a canvas element
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
-
-      // Set canvas size to match the comment element size
       const rect = comment.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
 
-      // Set canvas background color
-      context.fillStyle = "rgba(255,255,255,.5)";
+      // 获取用户设置的背景颜色和透明度
+      const { backgroundOpacity = 0.5, backgroundColor = "#ffffff" } = await new Promise((resolve) =>
+        chrome.storage.sync.get(["backgroundOpacity", "backgroundColor"], resolve)
+      );
+
+      // 设置背景颜色和透明度
+      context.fillStyle = hexToRgba(backgroundColor, backgroundOpacity);
       context.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Load the avatar image and draw it on the canvas
-      const avatar = comment.querySelector("#author-thumbnail #img").src;
-      const img = await loadImage(avatar);
+      // 加载头像
+      const avatarSrc = comment.querySelector("#author-thumbnail #img").src;
+      const avatarImg = await loadImage(avatarSrc);
 
-      context.save();
-      context.beginPath();
-      context.arc(30, 30, 20, 0, Math.PI * 2, true); // Draw a circle for the avatar
-      context.closePath();
-      context.clip();
-      context.drawImage(img, 10, 10, 40, 40); // Draw the avatar image
-      context.restore();
+      // 绘制圆形头像
+      drawAvatar(context, avatarImg, 30, 30, 20);
 
-      // Set text styles and draw username
+      // 绘制用户名
       const username = comment.querySelector("#author-text span").textContent.trim();
-      context.fillStyle = "black";
-      context.font = "14px Arial";
-      context.textBaseline = "top";
-      context.fillText(username, 60, 10);
+      drawText(context, username, 60, 10, true, 14);
 
-      // 获取英文文本
-      const text = comment.querySelector("#content-text");
-      const textChildNodes = text.querySelector('span.yt-core-attributed-string').childNodes;
-      let englishText = Array.from(textChildNodes).map(node => 
-        node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') 
-          ? node.textContent 
-          : ''
-      ).join('');
-
-      // Function to handle text drawing based on type (English or Chinese)
-      function drawTextWithUnderline(text, x, y, maxWidth, fontSize) {
-        const isChinese = hasChinese(text);
-        const words = text.split(isChinese ? '' : ' ');
-        const gap = 2;
-        const lineHeight = fontSize + gap * 2;
-        context.font = `${fontSize}px ${isChinese ? 'PingFang SC' : 'Arial'}`;
-
-        let line = '';
-        let startY = y;
-
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + (isChinese ? '' : ' ');
-          const metrics = context.measureText(testLine);
-          const testWidth = metrics.width;
-
-          if (testWidth > maxWidth && n > 0) {
-            // Draw text and underline
-            drawText(line, x, startY, isChinese, fontSize);
-            drawUnderline(x, startY + lineHeight, line);
-
-            line = words[n] + (isChinese ? '' : ' ');
-            startY += lineHeight;
-          } else {
-            line = testLine;
-          }
-        }
-
-        // Draw any remaining text
-        drawText(line, x, startY, isChinese, fontSize);
-        drawUnderline(x, startY + lineHeight, line);
-        return startY + lineHeight; // Return the y position for the next text
-      }
-
-      // Draw text with underline
-      function drawText(text, x, y, isChinese, fontSize) {
-        context.fillStyle = 'black';
-        context.fillText(text, x, y);
-      }
-
-      function drawUnderline(x, y, text) {
-        context.beginPath();
-        context.setLineDash([5, 3]); // Set the dashed line pattern
-        context.moveTo(x, y);
-        context.lineTo(x + context.measureText(text).width, y);
-        context.strokeStyle = 'rgba(200, 200, 200, 1)';
-        context.stroke();
-        context.setLineDash([]); // Reset the dashed line pattern
-      }
+      // 获取英文评论文本
+      const textElement = comment.querySelector("#content-text");
+      const englishText = extractTextFromNodes(
+        textElement.querySelector("span.yt-core-attributed-string").childNodes
+      );
 
       // 获取翻译后的中文文本
-      const trans = text.querySelector("sider-trans-text") || text.querySelector("font.__Cici_translate_translated_inject_node__") || comment.querySelector('ytd-expander sider-trans-text');
-      let nextY;
-      if (trans) {
-        // 获取翻译后的中文文本
-        const chineseText = trans.textContent.trim();
-        nextY = drawTextWithUnderline(englishText, 60, 30, canvas.width - 70, 14);
-        drawTextWithUnderline(chineseText, 60, nextY + 2, canvas.width - 70, 24);
-      } else {
-        drawTextWithUnderline(englishText, 60, 30, canvas.width - 70, 16);
+      const transElement =
+        textElement.querySelector("sider-trans-text") ||
+        textElement.querySelector("font.__Cici_translate_translated_inject_node__") ||
+        comment.querySelector("ytd-expander sider-trans-text");
+
+      // 绘制英文和翻译文本
+      let nextY = drawTextWithWordWrap(context, englishText, 60, 30, canvas.width - 70, 14, true);
+      if (transElement) {
+        const chineseText = transElement.textContent.trim();
+        nextY = drawTextWithWordWrap(context, chineseText, 60, nextY + 10, canvas.width - 70, 16, false);
       }
 
-      // 获取评论点赞数
-      const likesCount = comment.querySelector('#vote-count-middle');
+      // 绘制点赞图标和点赞数
+      const likesCount = comment.querySelector("#vote-count-middle");
       if (likesCount) {
         const likes = likesCount.childNodes[0].textContent.trim();
-        const thumbsUpIcon = new Image();
-        thumbsUpIcon.src = chrome.runtime.getURL('thumb-up-stroke.png');
-        
-        await new Promise((resolve, reject) => {
-          thumbsUpIcon.onload = resolve;
-          thumbsUpIcon.onerror = reject;
-        });
-        
-        context.fillStyle = 'rgba(0,0,0,.5)';
-        context.font = '12px sans-serif';
-        context.drawImage(thumbsUpIcon, 60, rect.height - 20, 16, 16); // Draw thumbs up icon
-        context.fillText(likes, 90, rect.height - 16); // Render likes count next to the icon
+        const thumbsUpIcon = await loadImage(chrome.runtime.getURL("thumb-up-stroke.png"));
+        drawLikes(context, thumbsUpIcon, likes, 60, rect.height - 20);
       }
 
-      // Create a download link
+      // 下载截图
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `${new Date().toDateString()}-comment-${Date.now()}.png`;
       link.click();
 
       resolve();
+
     } catch (err) {
-      console.error('下载头像有问题', err);
+      console.error(err);
       reject(err);
     }
+
+  });
+}
+
+// Helper: 绘制圆形头像
+function drawAvatar(context, img, x, y, radius) {
+  context.save();
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2, true);
+  context.closePath();
+  context.clip();
+  context.drawImage(img, x - radius, y - radius, radius * 2, radius * 2);
+  context.restore();
+}
+
+// Helper: 绘制文本
+function drawText(context, text, x, y, originComment, fontSize) {
+  context.font = `${fontSize}px Arial`;
+  if (!originComment) {
+    context.strokeStyle = "yellow";
+    context.lineWidth = 2;
+    context.strokeText(text, x, y);
+  }
+  context.fillStyle = "black";
+  context.fillText(text, x, y);
+}
+
+// Helper: 绘制多行文本
+function drawTextWithWordWrap(context, text, x, y, maxWidth, fontSize, originComment) {
+  const isChinese = /[\u4e00-\u9fa5]/.test(text);
+  const words = isChinese ? text.split("") : text.split(" ");
+  const lineHeight = fontSize + 4;
+  let line = "";
+  let currentY = y;
+
+  context.font = `${fontSize}px ${isChinese ? "PingFang SC" : "Arial"}`;
+
+  words.forEach((word, index) => {
+    const testLine = line + word + (isChinese ? "" : " ");
+    const testWidth = context.measureText(testLine).width;
+    if (testWidth > maxWidth && line) {
+      drawText(context, line, x, currentY, originComment, fontSize);
+      line = word + (isChinese ? "" : " ");
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+    if (index === words.length - 1) {
+      drawText(context, line, x, currentY, originComment, fontSize);
+    }
+  });
+
+  return currentY + lineHeight;
+}
+
+// Helper: 绘制点赞信息
+function drawLikes(context, icon, likes, x, y) {
+  context.drawImage(icon, x, y, 16, 16);
+  context.fillStyle = "rgba(0,0,0,.5)";
+  context.font = "12px sans-serif";
+  context.fillText(likes, x + 26, y + 4);
+}
+
+// Helper: 从节点提取文本
+function extractTextFromNodes(nodes) {
+  return Array.from(nodes)
+    .map((node) =>
+      node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN")
+        ? node.textContent
+        : ""
+    )
+    .join("");
+}
+
+// Helper: 加载图像
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // 设置跨域请求权限
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
   });
 }
 

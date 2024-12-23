@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>插件设置</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 10px;
+      width: 250px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    .preview {
+      margin-top: 15px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: center;
+      font-size: 14px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h3>评论截图设置</h3>
+
+  <label for="background-color">背景颜色:</label>
+  <input type="color" id="background-color" value="#ffffff">
+
+  <label for="background-opacity">背景透明度:</label>
+  <input type="range" id="background-opacity" min="0" max="1" step="0.1" value="0.5">
+  <span id="opacity-value">0.5</span>
+
+  <div class="preview" id="preview">预览区域</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
