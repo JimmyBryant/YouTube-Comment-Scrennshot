@@ -334,7 +334,7 @@ function drawLikes(context, icon, likes, x, y) {
 function extractTextFromNodes(nodes) {
   return Array.from(nodes)
     .map((node) =>
-      node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN")
+      node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && ["SPAN", "FONT"].includes(node.tagName))
         ? node.textContent
         : ""
     )
