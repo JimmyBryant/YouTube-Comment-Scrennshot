@@ -142,6 +142,7 @@ async function takeScreenshot(comment) {
 
       // 获取翻译后的中文文本
       const transElement =
+        comment.querySelector("ytd-expander aipal-trans aipal-trans-text") ||
         textElement.querySelector("sider-trans-text") ||
         textElement.querySelector("font.__Cici_translate_translated_inject_node__") ||
         comment.querySelector("ytd-expander sider-trans-text");

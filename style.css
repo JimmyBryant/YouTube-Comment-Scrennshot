@@ -7,12 +7,16 @@ tp-yt-paper-button.ytd-tri-state-button-view-model {
 .style-scope.ytd-expander sider-trans-text[data-display="underline"],
 .yt-core-attributed-string--white-space-pre-wrap
   sider-trans-text[data-display="underline"],
-p[class*="-PCommentText"] sider-trans-text[data-display="underline"] {
+p[class*="-PCommentText"] sider-trans-text[data-display="underline"],
+#expander aipal-trans aipal-trans-text {
   font-size: var(--font-size);
   color: #000;
   background: yellow;
   font-weight: bold;
   line-height: 1.25;
+}
+#replies aipal-trans aipal-trans-text{
+  display: none;
 }
 .more-button.style-scope.ytd-comment-view-model sider-trans-text {
   font-size: 12px;
