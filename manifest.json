@@ -22,7 +22,8 @@
     {
       "matches": [
         "*://*.youtube.com/*",
-        "*://*.tiktok.com/*"
+        "*://*.tiktok.com/*",
+        "*://*.xiaohongshu.com/*"
       ],
       "js": [
         "content.js"

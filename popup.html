@@ -1,81 +1,264 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>插件设置</title>
+    <title>YouTube 评论截图设置</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            padding: 10px;
-            width: 250px;
+            font-family: "Microsoft YaHei", sans-serif;
+            padding: 15px;
+            width: 320px;
+            background-color: #f9f9f9;
+            color: #333;
         }
-
+        .setting-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h3 {
+            margin-top: 0;
+            color: #ff0000;
+            text-align: center;
+        }
+        h4 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        .setting-row {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
         label {
             display: block;
             margin-bottom: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            width: 100px;
         }
-
+        input[type="text"], input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="color"] {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
         input[type="range"] {
             width: 100%;
+            margin: 10px 0;
         }
-
-        .preview {
-            margin-top: 15px;
-            padding: 10px;
-            border: 1px solid #ccc;
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .color-picker-label {
+            width: 100px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .color-options {
+            display: flex;
+            gap: 8px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+        .color-option.selected {
+            border-color: #ff0000;
+            transform: scale(1.1);
+        }
+        .color-option.disabled {
+            background: repeating-linear-gradient(
+                45deg,
+                #ccc,
+                #ccc 2px,
+                #ddd 2px,
+                #ddd 4px
+            );
+            position: relative;
+        }
+        .color-option.disabled::after {
+            content: "×";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 16px;
+            color: #ff0000;
+            font-weight: bold;
+        }
+        .stroke-width-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .stroke-width-value {
+            min-width: 30px;
             text-align: center;
-            font-size: 14px;
-            color: #333;
+            font-size: 13px;
         }
-        .setting-container{
+        .preview-box {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             margin-top: 15px;
+            background-color: white;
+            position: relative;
+            min-height: 30px;
+        }
+        #background-preview {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #000;
+            border-radius: 4px;
+            margin-top: 10px;
         }
     </style>
 </head>
-
 <body>
-    <h3>评论截图设置</h3>
+    <h3>YouTube 评论截图设置</h3>
 
-    <label for="background-color">背景颜色:</label>
-    <input type="color" id="background-color" value="#ffffff">
-
-    <label for="background-opacity">背景透明度:</label>
-    <input type="range" id="background-opacity" min="0" max="1" step="0.1" value="0.5">
-    <span id="opacity-value">0.5</span>
-
-    <div class="preview" id="preview">预览区域</div>
-    <div class="setting-container">
-        <label for="commentFont">评论字体</label>
-        <input type="text" id="commentFont" value="Arial">
+    <div class="setting-group">
+        <h4>背景设置</h4>
+        
+        <div class="setting-row">
+            <label for="background-color">背景颜色:</label>
+            <input type="color" id="background-color" value="#ffffff">
+        </div>
+        
+        <div class="setting-row">
+            <label for="background-opacity">背景透明度:</label>
+            <div style="flex-grow: 1;">
+                <input type="range" id="background-opacity" min="0" max="1" step="0.1" value="0.5">
+                <span id="opacity-value">0.5</span>
+            </div>
+        </div>
+        
+        <div class="setting-row">
+            <label>背景预览:</label>
+            <div id="background-preview"></div>
+        </div>
     </div>
 
-    <div class="setting-container">
-        <label for="commentSize">评论字体大小</label>
-        <input type="number" id="commentSize" value="14">
+    <div class="setting-group">
+        <h4>评论文字设置</h4>
+        
+        <div class="setting-row">
+            <label for="commentFont">字体:</label>
+            <input type="text" id="commentFont" value="Microsoft YaHei">
+        </div>
+        
+        <div class="setting-row">
+            <label for="commentSize">字体大小:</label>
+            <input type="number" id="commentSize" value="14" min="8" max="32">
+        </div>
+        
+        <div class="setting-row">
+            <label for="commentColor">字体颜色:</label>
+            <input type="color" id="commentColor" value="#000000">
+        </div>
+        
+        <div class="color-picker-row">
+            <span class="color-picker-label">描边颜色:</span>
+            <input type="color" id="commentStrokeColorPicker" value="#000000">
+        </div>
+        
+        <div class="color-options" id="commentStrokeColors">
+            <div class="color-option disabled selected" data-color="none" title="禁用描边"></div>
+            <div class="color-option" style="background-color: #000000;" data-color="#000000" title="黑色"></div>
+            <div class="color-option" style="background-color: #ffffff;" data-color="#ffffff" title="白色"></div>
+            <div class="color-option" style="background-color: #ff0000;" data-color="#ff0000" title="红色"></div>
+            <div class="color-option" style="background-color: #0000ff;" data-color="#0000ff" title="蓝色"></div>
+            <div class="color-option" style="background-color: #ffff00;" data-color="#ffff00" title="黄色"></div>
+        </div>
+        
+        <div class="setting-row">
+            <label>描边宽度:</label>
+            <div class="stroke-width-container">
+                <input type="range" id="commentStrokeWidth" min="1" max="5" value="2">
+                <span class="stroke-width-value" id="commentStrokeWidthValue">2像素</span>
+            </div>
+        </div>
+        
+        <div class="preview-box">
+            <div id="commentPreview" style="font-family: Microsoft YaHei; font-size: 14px; color: #000000;">
+                这是一条评论的预览文本
+            </div>
+        </div>
     </div>
 
-    <div class="setting-container">
-        <label for="commentColor">评论字体颜色</label>
-        <input type="color" id="commentColor" value="#000000">
+    <div class="setting-group">
+        <h4>翻译文字设置</h4>
+        
+        <div class="setting-row">
+            <label for="translationFont">字体:</label>
+            <input type="text" id="translationFont" value="PingFang SC">
+        </div>
+        
+        <div class="setting-row">
+            <label for="translationSize">字体大小:</label>
+            <input type="number" id="translationSize" value="16" min="8" max="32">
+        </div>
+        
+        <div class="setting-row">
+            <label for="translationColor">字体颜色:</label>
+            <input type="color" id="translationColor" value="#333333">
+        </div>
+        
+        <div class="color-picker-row">
+            <span class="color-picker-label">描边颜色:</span>
+            <input type="color" id="translationStrokeColorPicker" value="#0000ff">
+        </div>
+        
+        <div class="color-options" id="translationStrokeColors">
+            <div class="color-option disabled selected" data-color="none" title="禁用描边"></div>
+            <div class="color-option" style="background-color: #0000ff;" data-color="#0000ff" title="蓝色"></div>
+            <div class="color-option" style="background-color: #ffff00;" data-color="#ffff00" title="黄色"></div>
+            <div class="color-option" style="background-color: #ff00ff;" data-color="#ff00ff" title="粉色"></div>
+            <div class="color-option" style="background-color: #00ffff;" data-color="#00ffff" title="青色"></div>
+            <div class="color-option" style="background-color: #ffffff;" data-color="#ffffff" title="白色"></div>
+        </div>
+        
+        <div class="setting-row">
+            <label>描边宽度:</label>
+            <div class="stroke-width-container">
+                <input type="range" id="translationStrokeWidth" min="1" max="5" value="2">
+                <span class="stroke-width-value" id="translationStrokeWidthValue">2像素</span>
+            </div>
+        </div>
+        
+        <div class="preview-box">
+            <div id="translationPreview" style="font-family: PingFang SC; font-size: 16px; color: #333333;">
+                这是翻译文本的预览
+            </div>
+        </div>
     </div>
 
-    <div class="setting-container">
-        <label for="translationFont">翻译字体</label>
-        <input type="text" id="translationFont" value="PingFang SC">
-    </div>
-
-    <div class="setting-container">
-        <label for="translationSize">翻译字体大小</label>
-        <input type="number" id="translationSize" value="16">
-    </div>
-
-    <div class="setting-container">
-        <label for="translationColor">翻译字体颜色</label>
-        <input type="color" id="translationColor" value="#333333">
-    </div>
     <script src="popup.js"></script>
 </body>
-
 </html>

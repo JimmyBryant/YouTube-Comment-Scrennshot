@@ -15,7 +15,7 @@ p[class*="-PCommentText"] sider-trans-text[data-display="underline"],
   font-weight: bold;
   line-height: 1.25;
 }
-#replies aipal-trans aipal-trans-text{
+button aipal-trans aipal-trans-text,.more-button aipal-trans aipal-trans-text{
   display: none;
 }
 .more-button.style-scope.ytd-comment-view-model sider-trans-text {
@@ -66,4 +66,10 @@ yt-button-shape font.__Cici_translate_translated_inject_node__{
     color: orangered;
     border-radius: 5px;
 }
-  
+/* 小红书评论字体 */
+.note-scroller{
+  scroll-behavior: smooth;
+}
+.comment-inner-container .content{
+  font-size: 20px;
+}

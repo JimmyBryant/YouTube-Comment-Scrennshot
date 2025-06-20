@@ -1,4 +1,50 @@
 console.log("YouTube Comment Screenshot 插件已加载");
+const commentSection = document.querySelector('.note-scroller'); // 评论区
+const controlArea = document.querySelector('.interaction-container .author-wrapper'); // 按钮添加区域
+const scrollDistance = 200; // 每次滚动 100 像素
+const intervalTime = 3000; // 3 秒滚动一次
+const scrollDuration = 500; // 500ms 内完成滚动（平滑滚动速度）
+
+let isScrolling = false; // 记录是否正在滚动
+let scrollInterval; // 存储 setInterval 句柄
+
+// 创建按钮
+const scrollButton = document.createElement('button');
+scrollButton.textContent = '开始滚动';
+scrollButton.style.cssText = `
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 10px;
+  background: #080808;
+  border-radius: 5px;
+  color: #FFF;
+`;
+if(controlArea){
+  controlArea.appendChild(scrollButton);
+}
+
+// 切换滚动状态
+function toggleScroll() {
+  if (isScrolling) {
+    clearInterval(scrollInterval);
+    scrollButton.textContent = '开始滚动';
+  } else {
+    scrollInterval = setInterval(() => {
+      if (commentSection.scrollTop < commentSection.scrollHeight - commentSection.clientHeight) {
+        commentSection.scrollTop += scrollDistance;
+      } else {
+        commentSection.scrollTop = 0; // 回到顶部，形成循环滚动
+      }
+    }, intervalTime);
+
+    scrollButton.textContent = '停止滚动';
+  }
+  isScrolling = !isScrolling;
+}
+
+// 绑定按钮点击事件
+scrollButton.addEventListener('click', toggleScroll);
 
 // content.js
 function hasChinese(text) {
@@ -66,14 +112,18 @@ async function getUserSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(
       [
-        "backgroundOpacity",
+       "backgroundOpacity",
         "backgroundColor",
         "commentFont",
         "commentSize",
         "commentColor",
+        "commentStrokeColor",
+        "commentStrokeWidth",
         "translationFont",
         "translationSize",
         "translationColor",
+        "translationStrokeColor",
+        "translationStrokeWidth"
       ],
       resolve
     );
@@ -178,12 +228,12 @@ async function takeScreenshot(comment) {
       // 绘制用户名
       let textY = 20
       const username = comment.querySelector("#author-text span").textContent.trim();
-      drawText(context, username, 60, textY, commentFont, 12, commentColor, true);
+      drawUsername(context, username, 60, textY);
 
       // 绘制原评论和翻译后的评论文本
       let nextY = drawTextWithWordWrap(context, originComment, 60, textY + 20, canvas.width - 70, commentFont, commentSize, commentColor, true);
       if (translatedText) {
-        nextY = drawTextWithWordWrap(context, translatedText, 60, nextY + 5, canvas.width - 70, translationFont, translationSize, translationColor, false);
+        nextY = drawTextWithWordWrap(context, translatedText, 60, nextY + 10, canvas.width - 70, translationFont, translationSize, translationColor, false);
       }
 
       // 绘制点赞图标和点赞数
@@ -222,22 +272,38 @@ function drawAvatar(context, img, x, y, radius) {
   context.restore();
 }
 
-// Helper: 绘制单行文本
-function drawText(context, text, x, y, font, fontSize, color, originComment = false) {
-  context.font = `${parseInt(fontSize)}px ${font}`;
-
-  if (!originComment) {
-    // 如果是翻译文本，绘制描边效果
-    context.strokeStyle = "yellow";
-    context.lineWidth = 2;
-    context.strokeText(text, x, y);
-  }
-
-  context.fillStyle = color; // 设置字体颜色
-  context.fillText(text, x, y);
-  console.log('drawText', text, x, y, font, fontSize, color, originComment);
+// 修改后的 drawText 函数，支持描边效果
+async function drawText(context, text, x, y, font, fontSize, color, originComment = false) {
+    const settings = await getUserSettings();
+    
+    context.font = `${parseInt(fontSize)}px ${font}`;
+    
+    // 根据是评论还是翻译应用不同的描边设置
+    if (originComment && settings.commentStrokeColor) {
+        context.strokeStyle = settings.commentStrokeColor;
+        context.lineWidth = parseInt(settings.commentStrokeWidth) || 2;
+        context.strokeText(text, x, y);
+    } 
+    else if (!originComment && settings.translationStrokeColor) {
+        context.strokeStyle = settings.translationStrokeColor;
+        context.lineWidth = parseInt(settings.translationStrokeWidth) || 2;
+        context.strokeText(text, x, y);
+    }
+    
+    context.fillStyle = color;
+    context.fillText(text, x, y);
 }
 
+// 专门绘制用户名的函数
+function drawUsername(context, text, x, y) {
+    const usernameFont = "Arial";
+    const usernameSize = 12;
+    const usernameColor = '#0F0F0F';
+    
+    context.font = `${usernameSize}px ${usernameFont}`;
+    context.fillStyle = usernameColor;
+    context.fillText(text, x, y);
+}
 // Helper: 绘制多行文本
 function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, color, originComment = false) {
   const isChinese = /[\u4e00-\u9fa5]/.test(text);
