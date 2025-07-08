@@ -8,6 +8,8 @@ const scrollDuration = 500; // 500ms 内完成滚动（平滑滚动速度）
 let isScrolling = false; // 记录是否正在滚动
 let scrollInterval; // 存储 setInterval 句柄
 
+const DEBUG_MODE = false;
+
 // 创建按钮
 const scrollButton = document.createElement('button');
 scrollButton.textContent = '开始滚动';
@@ -190,6 +192,9 @@ async function takeScreenshot(comment) {
         textElement.querySelector("span.yt-core-attributed-string").childNodes
       );
 
+      if(!originComment){
+        return reject('未找到原始评论');
+      }
       // 获取翻译后的中文文本
       const transElement =
         comment.querySelector("ytd-expander aipal-trans aipal-trans-text") ||
@@ -198,6 +203,9 @@ async function takeScreenshot(comment) {
         comment.querySelector("ytd-expander sider-trans-text");
       const translatedText = transElement ? transElement.textContent.trim() : "";
 
+      if(!translatedText){
+        return reject('未找到翻译后的中文');
+      }
       // 计算动态部分高度
       const usernameHeight = 40; // 固定
       const likesHeight = 20; // 固定
@@ -241,7 +249,6 @@ async function takeScreenshot(comment) {
       if (likesCount) {
         const likes = likesCount.childNodes[0].textContent.trim();
         const thumbsUpIcon = await loadImage(chrome.runtime.getURL("thumb-up-stroke.png"));
-        console.log('likes y',canvasHeight - 20)
         drawLikes(context, thumbsUpIcon, likes, 60, canvasHeight - 20);
       }
 
@@ -304,38 +311,165 @@ function drawUsername(context, text, x, y) {
     context.fillStyle = usernameColor;
     context.fillText(text, x, y);
 }
-// Helper: 绘制多行文本
-function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, color, originComment = false) {
-  const isChinese = /[\u4e00-\u9fa5]/.test(text);
-  const words = isChinese ? text.split("") : text.split(" "); // 中文按字切割，其他按单词
-  fontSize = parseInt(fontSize);
-  const lineHeight = fontSize + baseLinePadding; // 行高
-  let line = "";
-  let currentY = y;
+/**
+ * 绘制自动换行的文本（支持中英文混排）
+ * @param {CanvasRenderingContext2D} context - Canvas绘图上下文
+ * @param {string} text - 要绘制的文本
+ * @param {number} x - 起始x坐标
+ * @param {number} y - 起始y坐标
+ * @param {number} maxWidth - 最大行宽
+ * @param {string} font - 字体名称
+ * @param {number} fontSize - 字体大小
+ * @param {string} color - 文本颜色
+ * @param {boolean} isOriginComment - 是否是原始评论（影响文本样式）
+ * @returns {number} 返回最后一行文本的底部y坐标
+ */
+function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, color, isOriginComment) {
+    try {
+        // 1. 参数验证
+        if (!context || !text || typeof text !== 'string') {
+            throw new Error(`无效参数: context=${context}, text=${text}`);
+        }
 
-  context.font = `${fontSize}px ${font}`;
-  context.fillStyle = color;
+        console.groupCollapsed(`[drawTextWithWordWrap] 开始绘制文本: "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`);
+        console.log('参数:', { x, y, maxWidth, font, fontSize, color, isOriginComment });
 
-  words.forEach((word, index) => {
-    const testLine = line + word + (isChinese ? "" : " ");
-    const testWidth = context.measureText(testLine).width;
+        // 2. 设置字体和样式（添加字体回退）
+        const safeFont = `"${font}", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`;
+        context.font = `${fontSize}px ${safeFont}`;
+        context.fillStyle = color;
+        context.textBaseline = 'top'; // 统一使用顶部对齐
+        
+        // 3. 调试信息
+        console.log('实际使用的字体:', context.font);
+        console.log('Canvas状态:', {
+            width: context.canvas.width,
+            height: context.canvas.height,
+            fillStyle: context.fillStyle,
+            globalAlpha: context.globalAlpha
+        });
 
-    // 如果超出最大宽度则换行
-    if (testWidth > maxWidth && line) {
-      drawText(context, line.trim(), x, currentY, font, fontSize, color, originComment);
-      line = word + (isChinese ? "" : " ");
-      currentY += lineHeight; // 下一行的 y 坐标
-    } else {
-      line = testLine;
+        // 4. 文本分割（中英文不同处理）
+        const isChinese = /[\u4e00-\u9fa5]/.test(text);
+        const words = isChinese ? text.split('') : text.split(' ');
+        let line = '';
+        let currentY = y;
+        const lineHeight = fontSize * 1.2; // 行高为字体大小的1.2倍
+
+        console.log('文本分析:', {
+            isChinese,
+            wordCount: words.length,
+            lineHeight
+        });
+
+        // 5. 绘制参考线（调试用）
+        if (DEBUG_MODE) {
+            context.save();
+            context.strokeStyle = 'rgba(255,0,0,0.2)';
+            context.beginPath();
+            context.moveTo(x, currentY);
+            context.lineTo(x + maxWidth, currentY);
+            context.stroke();
+            context.restore();
+        }
+
+        // 6. 逐词绘制
+        for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            const testLine = line + word + (isChinese ? '' : ' ');
+            const metrics = context.measureText(testLine);
+            
+            console.debug(`处理单词 ${i+1}/${words.length}:`, {
+                word,
+                testLine,
+                width: metrics.width,
+                currentLine: line
+            });
+
+            // 换行判断
+            if (metrics.width > maxWidth && line) {
+                // 绘制当前行
+                drawTextLine(context, line, x, currentY, color, isOriginComment);
+                console.log('换行绘制:', { line, x, y: currentY });
+                
+                // 移动到下一行
+                currentY += lineHeight;
+                line = word + (isChinese ? '' : ' ');
+                
+                // 检查是否超出画布
+                if (currentY > context.canvas.height) {
+                    console.warn('警告: 内容超出Canvas高度', { currentY, canvasHeight: context.canvas.height });
+                    break;
+                }
+            } else {
+                line = testLine;
+            }
+        }
+
+        // 7. 绘制最后一行
+        if (line) {
+            drawTextLine(context, line.trim(), x, currentY, color, isOriginComment);
+            console.log('最后一行:', { line, x, y: currentY });
+        }
+
+        // 8. 返回最后位置
+        const finalY = currentY + lineHeight;
+        console.log('绘制完成，最终Y位置:', finalY);
+        console.groupEnd();
+        
+        return finalY;
+
+    } catch (error) {
+        console.error('在drawTextWithWordWrap中发生错误:', error);
+        // 绘制错误标记（调试用）
+        context.save();
+        context.fillStyle = 'rgba(255,0,0,0.3)';
+        context.fillRect(x, y, 50, 20);
+        context.fillStyle = '#000';
+        context.font = '10px Arial';
+        context.fillText('ERROR', x + 5, y + 12);
+        context.restore();
+        
+        return y; // 返回原始Y位置
     }
+}
 
-    // 绘制最后一行
-    if (index === words.length - 1) {
-      drawText(context, line.trim(), x, currentY, font, fontSize, color, originComment);
+/**
+ * 绘制单行文本（包含描边效果）
+ */
+async function drawTextLine(context, text, x, y, color, isOriginComment) {
+    try {
+        // 异步获取用户设置
+        const settings = await getUserSettings();
+        
+        // 根据是否是原始评论获取对应的描边设置
+        const strokeSettings = isOriginComment ? {
+            color: settings.commentStrokeColor || 'transparent',
+            width: parseInt(settings.commentStrokeWidth) || 0
+        } : {
+            color: settings.translationStrokeColor || 'transparent',
+            width: parseInt(settings.translationStrokeWidth) || 0
+        };
+
+        console.log('描边设置:',settings, strokeSettings);
+        
+        // 绘制描边（如果有设置）
+        if (strokeSettings.width > 0 && strokeSettings.color !== 'transparent') {
+            context.save();
+            context.strokeStyle = strokeSettings.color;
+            context.lineWidth = strokeSettings.width;
+            context.strokeText(text, x, y);
+            context.restore();
+        }
+
+        // 绘制填充文本
+        context.fillStyle = color;
+        context.fillText(text, x, y);
+        
+    } catch (error) {
+        console.error('在drawTextLine中发生错误:', error);
+        // 错误处理...
     }
-  });
-
-  return currentY + lineHeight; // 返回最后一行的 y 坐标
 }
 
 // // Helper: 绘制文本
@@ -378,23 +512,46 @@ function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, col
 //   return currentY + lineHeight;
 // }
 
-// Helper: 绘制点赞信息
+/**
+ * 绘制点赞信息（图标+数字）
+ */
 function drawLikes(context, icon, likes, x, y) {
-  const iconSize = 16; // 图标尺寸
-  const fontSize = 12; // 文字尺寸
-
-  // 绘制图标
-  context.drawImage(icon, x, y, iconSize, iconSize);
-
-  // 设置文字样式
-  context.fillStyle = "rgba(0,0,0,.5)";
-  context.font = `${fontSize}px sans-serif`;
-
-  // 手动调整文字的 y 坐标，使其基线与图标垂直中心对齐
-  const textY = y + iconSize / 2 + fontSize / 2; // 字体基线调整 (fontSize / 3 是经验值)
-
-  // 绘制文字
-  context.fillText(likes, x + iconSize + 10, textY);
+    const iconSize = 16; // 图标尺寸
+    const fontSize = 12; // 文字尺寸
+    const verticalPadding = 2; // 垂直方向的内边距
+    
+    // 计算整体高度
+    const totalHeight = Math.max(iconSize, fontSize + verticalPadding * 2);
+    
+    // 绘制图标（垂直居中）
+    const iconY = y + (totalHeight - iconSize) / 2;
+    context.drawImage(icon, x, iconY, iconSize, iconSize);
+    
+    // 设置文字样式
+    context.fillStyle = "rgba(0,0,0,.5)";
+    context.font = `${fontSize}px sans-serif`;
+    context.textBaseline = 'middle'; // 使用垂直居中
+    
+    // 绘制文字（垂直居中，与图标水平对齐）
+    const textX = x + iconSize + 5; // 图标和文字间距5px
+    const textY = y + totalHeight / 2; // 垂直居中
+    
+    // 调试参考线
+    if (DEBUG_MODE) {
+        context.save();
+        context.strokeStyle = 'rgba(0,0,255,0.3)';
+        context.setLineDash([2,2]);
+        // 图标区域
+        context.strokeRect(x, y, iconSize, totalHeight);
+        // 文字基线
+        context.beginPath();
+        context.moveTo(textX, textY);
+        context.lineTo(textX + 50, textY);
+        context.stroke();
+        context.restore();
+    }
+    
+    context.fillText(likes, textX, textY);
 }
 
 // Helper: 从节点提取文本
