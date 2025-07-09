@@ -379,7 +379,7 @@ function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, col
             const testLine = line + word + (isChinese ? '' : ' ');
             const metrics = context.measureText(testLine);
             
-            console.debug(`处理单词 ${i+1}/${words.length}:`, {
+            console.log(`处理单词 ${i+1}/${words.length}:`, {
                 word,
                 testLine,
                 width: metrics.width,
@@ -388,6 +388,7 @@ function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, col
 
             // 换行判断
             if (metrics.width > maxWidth && line) {
+
                 // 绘制当前行
                 drawTextLine(context, line, x, currentY, color, isOriginComment);
                 console.log('换行绘制:', { line, x, y: currentY });
@@ -434,41 +435,80 @@ function drawTextWithWordWrap(context, text, x, y, maxWidth, font, fontSize, col
     }
 }
 
-/**
- * 绘制单行文本（包含描边效果）
- */
 async function drawTextLine(context, text, x, y, color, isOriginComment) {
+    // 总是保存当前上下文状态
+    context.save();
+    
     try {
         // 异步获取用户设置
         const settings = await getUserSettings();
         
-        // 根据是否是原始评论获取对应的描边设置
-        const strokeSettings = isOriginComment ? {
-            color: settings.commentStrokeColor || 'transparent',
-            width: parseInt(settings.commentStrokeWidth) || 0
+        // 根据文本类型(评论/翻译)确定样式参数
+        const {
+            font,
+            fontSize,
+            color: textColor,
+            strokeColor,
+            strokeWidth
+        } = isOriginComment ? {
+            font: settings.commentFont || "Arial",
+            fontSize: parseInt(settings.commentSize) || 14,
+            color: settings.commentColor || "#333",
+            strokeColor: settings.commentStrokeColor,
+            strokeWidth: parseInt(settings.commentStrokeWidth) || 0
         } : {
-            color: settings.translationStrokeColor || 'transparent',
-            width: parseInt(settings.translationStrokeWidth) || 0
+            font: settings.translationFont || "Arial",
+            fontSize: parseInt(settings.translationSize) || 16,
+            color: settings.translationColor || "#000",
+            strokeColor: settings.translationStrokeColor,
+            strokeWidth: parseInt(settings.translationStrokeWidth) || 0
         };
 
-        console.log('描边设置:',settings, strokeSettings);
+        // 1. 设置字体（必须包含字号和字体族）
+        context.font = `${fontSize}px ${font}`;
         
-        // 绘制描边（如果有设置）
-        if (strokeSettings.width > 0 && strokeSettings.color !== 'transparent') {
-            context.save();
-            context.strokeStyle = strokeSettings.color;
-            context.lineWidth = strokeSettings.width;
-            context.strokeText(text, x, y);
-            context.restore();
+        // 2. 设置填充颜色（使用传入的color参数或默认值）
+        context.fillStyle = color || textColor;
+        
+        // 3. 如果有描边设置，应用描边样式
+        if (strokeColor && strokeWidth > 0) {
+            context.strokeStyle = strokeColor;
+            context.lineWidth = strokeWidth;
+            context.lineJoin = "round"; // 使描边更平滑
         }
 
-        // 绘制填充文本
-        context.fillStyle = color;
+        // 调试日志
+        if (DEBUG_MODE) {
+            console.log(`绘制${isOriginComment ? "评论" : "翻译"}文本:`, {
+                text: text.length > 20 ? text.substring(0, 20) + "..." : text,
+                font: context.font,
+                fillStyle: context.fillStyle,
+                strokeStyle: context.strokeStyle,
+                lineWidth: context.lineWidth
+            });
+        }
+
+        // 4. 先绘制描边（如果有）
+        if (strokeColor && strokeWidth > 0) {
+            context.strokeText(text, x, y);
+        }
+        
+        // 5. 再绘制填充文本
         context.fillText(text, x, y);
         
     } catch (error) {
-        console.error('在drawTextLine中发生错误:', error);
-        // 错误处理...
+        console.error("在drawTextLine中发生错误:", error);
+        // 错误可视化（仅调试模式）
+        if (DEBUG_MODE) {
+            context.fillStyle = "rgba(255,0,0,0.2)";
+            context.fillRect(x - 10, y - 10, 100, 20);
+            context.fillStyle = "#000";
+            context.font = "10px Arial";
+            context.fillText("绘制错误", x, y);
+        }
+    } finally {
+        // 恢复原始上下文状态
+        context.restore();
     }
 }
 
